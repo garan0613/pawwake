@@ -20,8 +20,8 @@ API_KEY = os.getenv("API_KEY", "")
 # 本地 Ollama: http://localhost:11434/v1/chat/completions
 API_BASE_URL = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
 
-# 默认模型（如果客户端没指定就用这个）
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "anthropic/claude-sonnet-4")
+# 默认模型（如果客户端没指定就用这个；留空时要求客户端显式传 model）
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "")
 
 # 网关端口
 PORT = int(os.getenv("PORT", "8080"))
@@ -190,7 +190,7 @@ SETTINGS_TYPES = {
     "MEMORY_HW_RECENCY": float,
     "MEMORY_SEMANTIC_THRESHOLD": float,
 }
-SETTINGS_ALLOW_EMPTY = {"CACHE_SUMMARY_MODEL", "MEMORY_API_KEY"}
+SETTINGS_ALLOW_EMPTY = {"CACHE_SUMMARY_MODEL", "DEFAULT_MODEL", "MEMORY_API_KEY"}
 
 
 def get_memory_api_key() -> str:
@@ -200,13 +200,12 @@ def sync_memory_extractor_config():
     """把配置推给 memory_extractor：它在 import 时就把这几个读成了自己的模块级全局，
     之后改 os.environ 或 main 的 globals 都够不着，面板换了模型/换了 key，提取那边
     还拿启动时那份跑。数据库恢复完和面板保存完各调一次。
-    MEMORY_MODEL 落回 DEFAULT_MEMORY_MODEL 而不是当前值：面板上这项写着"留空用默认"，
-    清空写进的是空串，落回当前值会让热更新沿用旧模型、重启后却变默认，前后分裂。"""
+    MEMORY_MODEL 留空时保持停用，不能沿用热更新前的旧模型。"""
     import memory_extractor as _me_mod
     _me_mod.API_KEY = API_KEY
     _me_mod.API_BASE_URL = API_BASE_URL
     _me_mod.MEMORY_API_KEY = MEMORY_API_KEY
-    _me_mod.MEMORY_MODEL = os.environ.get("MEMORY_MODEL") or _me_mod.DEFAULT_MEMORY_MODEL
+    _me_mod.MEMORY_MODEL = os.environ.get("MEMORY_MODEL", "")
 
 # 额外的请求头（有些 API 需要，比如 OpenRouter 需要 Referer）
 EXTRA_REFERER = os.getenv("EXTRA_REFERER", "https://github.com/garan0613/pawwake")

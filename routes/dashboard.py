@@ -1,9 +1,10 @@
 """Dashboard pages, model listing, and runtime settings."""
 
 import os
+import re
 import secrets
 import logging
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -119,12 +120,24 @@ async def dashboard_page(request: Request):
 # 设置面板的 combo-box 用，根据 API_BASE_URL 自动适配
 # ============================================================
 
+def _google_model_sort_key(model):
+    """Put versioned Gemini models first, newest major/minor version first."""
+    model_id = model.get("id", "")
+    match = re.search(r"(?:^|/)gemini-(\d+)(?:\.(\d+))?", model_id)
+    if not match:
+        return (1, 0, 0, model_id)
+    return (0, -int(match.group(1)), -int(match.group(2) or 0), model_id)
+
 @settings_router.get("/api/models")
 async def get_models():
     """获取可用模型列表（根据 API_BASE_URL 自动适配）"""
-    is_openrouter = "openrouter.ai" in shared.API_BASE_URL
-    is_google = "googleapis.com" in shared.API_BASE_URL or "generativelanguage" in shared.API_BASE_URL
-    is_openai = "api.openai.com" in shared.API_BASE_URL
+    try:
+        hostname = urlsplit(shared.API_BASE_URL).hostname
+    except ValueError:
+        hostname = None
+    is_openrouter = hostname == "openrouter.ai"
+    is_google = hostname == "generativelanguage.googleapis.com"
+    is_openai = hostname == "api.openai.com"
 
     try:
         if is_openrouter:
@@ -143,7 +156,8 @@ async def get_models():
         elif is_google:
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(
-                    f"https://generativelanguage.googleapis.com/v1beta/models?key={shared.API_KEY}"
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": shared.API_KEY, "pageSize": 1000},
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -156,13 +170,7 @@ async def get_models():
                         supported_methods = m.get("supportedGenerationMethods", [])
                         if "generateContent" in supported_methods:
                             simplified.append({"id": model_id, "name": display_name, "context_length": m.get("inputTokenLimit"), "output_limit": m.get("outputTokenLimit")})
-                    def sort_key(x):
-                        name = x.get("id", "")
-                        if "gemini-3" in name: return "0" + name
-                        elif "gemini-2.5" in name: return "1" + name
-                        elif "gemini-2.0" in name: return "2" + name
-                        else: return "9" + name
-                    simplified.sort(key=sort_key)
+                    simplified.sort(key=_google_model_sort_key)
                     return {"models": simplified, "total": len(simplified), "provider": "google"}
                 else:
                     print(f"[get_models] Google API 返回 {response.status_code}: {response.text}")
@@ -177,16 +185,15 @@ async def get_models():
                 if response.status_code == 200:
                     data = response.json()
                     models = data.get("data", [])
-                    simplified = [{"id": m.get("id", ""), "name": m.get("id", "")} for m in models if m.get("id", "").startswith(("gpt-", "o1", "o3", "o4"))]
+                    simplified = [
+                        {"id": m.get("id", ""), "name": m.get("id", "")}
+                        for m in models
+                        if m.get("id")
+                    ]
                     simplified.sort(key=lambda x: x.get("id", ""))
                     return {"models": simplified, "total": len(simplified), "provider": "openai"}
-            openai_models = [
-                {"id": "gpt-4.1", "name": "GPT-4.1"},
-                {"id": "gpt-4o", "name": "GPT-4o"},
-                {"id": "gpt-4o-mini", "name": "GPT-4o Mini"},
-                {"id": "o3-mini", "name": "o3-mini"},
-            ]
-            return {"models": openai_models, "total": len(openai_models), "provider": "openai"}
+                print(f"[get_models] OpenAI API 返回 {response.status_code}: {response.text}")
+                return {"error": f"OpenAI API 返回 {response.status_code}", "models": [], "provider": "openai"}
 
         else:
             return {"models": [], "total": 0, "provider": "unknown", "note": "未识别的 API，请手动输入模型名"}

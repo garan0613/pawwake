@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI):
 
 
 
-app = FastAPI(title="Pawwake", version="4.1.7", lifespan=lifespan)
+app = FastAPI(title="Pawwake", version="4.1.8", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.middleware("http")(auth.gateway_auth_middleware)
 
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     import uvicorn
     print(f"🚀 Pawwake 启动中... 端口 {shared.PORT}")
     print(f"📝 人设长度：{len(shared.SYSTEM_PROMPT)} 字符")
-    print(f"🤖 默认模型：{shared.DEFAULT_MODEL}")
+    print(f"🤖 默认模型：{shared.DEFAULT_MODEL or '未配置'}")
     print(f"🔗 API 地址：{shared.API_BASE_URL}")
     print(f"🗄️  数据库总闸：{'开启' if shared.DATABASE_ENABLED else '关闭'}")
     print(f"💬 对话持久化：{'开启' if shared.conversation_persistence_enabled() else '关闭'}")

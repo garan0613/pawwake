@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import shared
+import memory_extractor
 import partition_engine
 from db import core as db_core
 from db import search as db_search
@@ -545,6 +546,10 @@ async def process_memories_background(
                     "_source_message_id": assistant_source_id,
                 },
             ]
+
+        if not memory_extractor.MEMORY_MODEL:
+            print("⏭️  MEMORY_MODEL 未设置，跳过记忆提取")
+            return
 
         # 4. 用同一提取窗口只读检索相关候选与最新活跃记忆。
         candidate_query = _extraction_query_text(messages_for_extraction)

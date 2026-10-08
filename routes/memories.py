@@ -8,12 +8,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 import shared
+import memory_extractor
 import memory_consolidator
 from db import core as db_core
 from db import search as db_search
 from db import conversations as db_conversations
 from db import memories as db_memories
-from memory_extractor import score_memories
 
 logger = logging.getLogger(__name__)
 
@@ -464,6 +464,9 @@ async def api_manual_consolidate(request: Request):
         async def build_preview():
             return await memory_consolidator.preview_date_range(start_date, end_date)
 
+    if not memory_extractor.MEMORY_MODEL:
+        return {"error": "MEMORY_MODEL 未设置，请先在 Dashboard 设置记忆模型"}
+
     async def _run():
         try:
             _consolidate_status["result"] = await build_preview()
@@ -679,7 +682,9 @@ async def import_text_memories(request: Request):
         if skip_scoring:
             scored = [{"content": t, "importance": 5} for t in lines]
         else:
-            scored = await score_memories(lines)
+            if not memory_extractor.MEMORY_MODEL:
+                return {"error": "MEMORY_MODEL 未设置，请先在 Dashboard 设置记忆模型，或选择跳过评分"}
+            scored = await memory_extractor.score_memories(lines)
 
         imported = 0
         skipped = 0

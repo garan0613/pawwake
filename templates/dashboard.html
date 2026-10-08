@@ -484,7 +484,7 @@
                     <div class="settings-field">
                         <label>默认模型</label>
                         <div class="combo-box" id="combo-DEFAULT_MODEL">
-                            <input type="text" id="set-DEFAULT_MODEL" class="combo-input" placeholder="搜索或输入模型名..." autocomplete="off">
+                            <input type="text" id="set-DEFAULT_MODEL" class="combo-input" placeholder="搜索或输入模型名（留空时客户端必须传 model）" autocomplete="off">
                             <div class="combo-dropdown" id="dropdown-DEFAULT_MODEL"></div>
                         </div>
                         <small class="form-hint"><span id="model-count-hint"></span> <a href="#" onclick="loadModelList();return false;" style="color:var(--primary);">刷新列表</a></small>
@@ -501,9 +501,10 @@
                     <div class="settings-field">
                         <label>记忆提取 / 整理模型</label>
                         <div class="combo-box" id="combo-MEMORY_MODEL">
-                            <input type="text" id="set-MEMORY_MODEL" class="combo-input" placeholder="搜索或输入模型名（留空用默认）" autocomplete="off">
+                            <input type="text" id="set-MEMORY_MODEL" class="combo-input" placeholder="搜索或输入模型名" autocomplete="off">
                             <div class="combo-dropdown" id="dropdown-MEMORY_MODEL"></div>
                         </div>
+                        <small class="form-hint">留空时暂停记忆提取、评分和整理</small>
                     </div>
                     <div class="settings-field">
                         <label>记忆模型 API Key (MEMORY_API_KEY)</label>
@@ -713,6 +714,6 @@
         </main>
     </div>
 
-    <script src="/static/js/dashboard.js?v=4.1.7"></script>
+    <script src="/static/js/dashboard.js?v=4.1.8"></script>
 </body>
 </html>

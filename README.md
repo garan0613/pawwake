@@ -1,6 +1,6 @@
 # 🐾 Pawwake · 爪迹
 
-**4.1.7 · Madeleine**
+**4.1.8 · Madeleine**
 
 *Follow the pawprints back.*
 
@@ -68,15 +68,19 @@ Give your AI long-term memory. A lightweight proxy gateway that adds a memory la
 
 | 环境变量 | 说明 | 示例 |
 |---------|------|------|
-| `API_KEY` | 你的 LLM API Key | `sk-or-v1-xxxx`（OpenRouter）|
+| `API_KEY` | 你的 LLM API Key；可在部署后从 Dashboard 设置 | `sk-or-v1-xxxx`（OpenRouter）|
 | `API_BASE_URL` | LLM API 地址 | `https://openrouter.ai/api/v1/chat/completions` |
-| `DEFAULT_MODEL` | 默认模型 | `anthropic/claude-sonnet-4.5` |
+| `DEFAULT_MODEL` | 默认模型；留空时客户端必须显式传 `model` | 空 |
 | `PORT` | 端口 | `8000` |
 | `GATEWAY_SECRET`（强烈建议） | 程序 API 鉴权密钥，客户端通过 `X-Gateway-Key` 请求头发送 | 独立随机值 |
 | `DASHBOARD_PASSWORD` | Dashboard 登录密码，不与网关密钥共用 | 独立强密码 |
 | `SESSION_SECRET` | Dashboard 会话签名密钥，至少 32 字符且每次部署保持不变 | 独立随机值 |
 
 5. 部署，访问你的网关地址看到 `{"status":"running"}` 就成功了
+
+首次部署后先登录 `/dashboard`，在「设置 → 基础连接」填写 API 地址、Key 和默认模型；需要记忆提取时，再填写记忆模型。
+
+> 从旧版本升级后，如果曾依赖内置的默认模型或记忆模型，也需要在 Dashboard 明确填写。默认模型留空且客户端未传 `model` 时返回 400；记忆模型留空时暂停提取、评分和整理。
 
 可在本地分别运行三次下面的命令生成互不相同的随机值：
 
@@ -93,7 +97,7 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
 以 Kelivo 为例：
 - API 地址填：`https://你的网关地址.onrender.com/v1`
 - API Key 填：随便填一个（网关会用自己的 key）
-- 模型填：你在 `DEFAULT_MODEL` 里设的模型
+- 模型填：Dashboard 中设置的默认模型，或由客户端每次显式传入
 
 ### 第二阶段：加上记忆系统
 
@@ -112,7 +116,7 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
 | `DATABASE_ENABLED` | 数据库总开关；设为 `false` 时强制关闭记忆、分区缓存和对话召回，进入纯转发模式。恢复需改回 `true` 并重启 | `true` |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql://user:pass@host:port/db` |
 | `MEMORY_ENABLED` | 开启记忆 | `true` |
-| `MEMORY_MODEL` | 记忆提取、评分、整理共用的模型（推荐便宜的小模型），留空回退到内置默认 | `anthropic/claude-haiku-4.5` |
+| `MEMORY_MODEL` | 记忆提取、评分、整理共用的模型（推荐便宜的小模型）；留空时暂停这三项后台调用 | 空 |
 | `MEMORY_MAX_TOKENS（可选）` | 记忆提取、评分和整理单批次的输出上限。整理达到上限时会自动拆小批次；提取日志提示截断时可调高此项 | `4000` |
 | `MAX_MEMORIES_INJECT` | 每次注入的最大记忆条数，`0` 禁用自动注入 | `15` |
 | `MEMORY_SEEN_TTL_HOURS` | 分区模式按 `memories.id` 去重的小时数；成功响应后标记，`0` 关闭 | `6` |
@@ -384,6 +388,12 @@ A: 打开 `https://你的网关地址/dashboard`，在「导出备份」页面�
 A: 能。这个项目的第一个部署者就是不会写代码的——代码是 AI 写的，部署是她自己看文档搞定的。
 
 ## 📋 更新日志
+
+### v4.1.8 · Madeleine（2026-10-08）
+
+- **模型改为按需设置** — `DEFAULT_MODEL` 和 `MEMORY_MODEL` 不再带内置值，新旧部署都可在 Dashboard 按需填写；聊天请求未带模型且 Dashboard 没有默认模型时返回 400，`/v1/models` 返回空列表。
+- **记忆模型留空即暂停** — 停止记忆提取、评分和整理；对话照常保存，留空期间不会补提取。
+- **模型列表跟随服务商** — Google 一次读取最多 1000 个模型，只显示可对话项并将新版 Gemini 排在前面；OpenAI 展示接口返回的全部型号，可能包含不能对话的模型。拉取失败时直接报错，不再显示过时的备用列表。
 
 ### v4.1.7 · Madeleine（2026-09-27）
 

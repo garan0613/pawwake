@@ -22,11 +22,8 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1/chat/comp
 # 适用于中转站按模型分组、不同模型需要不同 Key 的场景
 MEMORY_API_KEY = os.getenv("MEMORY_API_KEY", "")
 
-# 用来提取记忆的模型（便宜的就行）
-# 面板上这项写着"留空用默认"，清空会写进一个空串，os.getenv 的默认值这时不生效，
-# 所以默认值单独拎出来用 or 兜，热更新和重启后行为才一致
-DEFAULT_MEMORY_MODEL = "anthropic/claude-haiku-4.5"
-MEMORY_MODEL = os.getenv("MEMORY_MODEL") or DEFAULT_MEMORY_MODEL
+# 用来提取、评分和整理记忆的模型；留空时暂停这些后台调用。
+MEMORY_MODEL = os.getenv("MEMORY_MODEL", "")
 
 # 记忆提取的输出上限，原先硬编码 1000。部分上游会把 reasoning token
 # 也算进这条额度，JSON 可能在收尾前被截断，表面只报"未找到JSON数组"
@@ -179,6 +176,10 @@ async def extract_memories(messages: List[Dict[str, str]], existing_memories: Li
     """
     if not get_memory_api_key():
         print("⚠️  API_KEY 和 MEMORY_API_KEY 都未设置，跳过记忆提取")
+        return []
+
+    if not MEMORY_MODEL:
+        print("⚠️  MEMORY_MODEL 未设置，跳过记忆提取")
         return []
 
     if not messages:
@@ -388,6 +389,9 @@ async def score_memories(texts: List[str]) -> List[Dict]:
     """对纯文本记忆条目批量评分"""
     if not texts:
         return []
+    if not MEMORY_MODEL:
+        print("⚠️  MEMORY_MODEL 未设置，跳过记忆评分")
+        return _default_scores(texts)
 
     memories_text = "\n".join(f"- {t}" for t in texts)
     prompt = SCORING_PROMPT.format(memories_text=memories_text)

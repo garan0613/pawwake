@@ -357,6 +357,8 @@ async def _preview_memory_batch(client, memories, event_date, model, max_tokens)
 
 async def preview_memories(memories: list) -> dict:
     """Generate grouped editable drafts for selected active memories."""
+    if not memory_extractor.MEMORY_MODEL:
+        raise MemoryConsolidationError("MEMORY_MODEL 未设置，请先在 Dashboard 设置记忆模型")
     async with httpx.AsyncClient(timeout=120.0) as client:
         result = await _preview_memory_batch(
             client,
@@ -377,6 +379,8 @@ async def preview_memories(memories: list) -> dict:
 
 async def preview_date_range(start_date, end_date) -> dict:
     """Generate editable drafts for active fragments and events in a date range."""
+    if not memory_extractor.MEMORY_MODEL:
+        raise MemoryConsolidationError("MEMORY_MODEL 未设置，请先在 Dashboard 设置记忆模型")
     all_drafts = []
     memories_processed = 0
     batches = 0

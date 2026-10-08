@@ -174,7 +174,7 @@ async def health_check():
 
     return {
         "status": "running",
-        "gateway": "Pawwake v4.1.7",
+        "gateway": "Pawwake v4.1.8",
         "system_prompt_loaded": len(resolved_system_prompt) > 0,
         "system_prompt_length": len(resolved_system_prompt),
         "database_enabled": shared.DATABASE_ENABLED,
@@ -191,16 +191,17 @@ async def health_check():
 @router.get("/v1/models")
 async def list_models():
     """模型列表（让客户端不报错）"""
+    models = []
+    if shared.DEFAULT_MODEL:
+        models.append({
+            "id": shared.DEFAULT_MODEL,
+            "object": "model",
+            "created": 1700000000,
+            "owned_by": "pawwake",
+        })
     return {
         "object": "list",
-        "data": [
-            {
-                "id": shared.DEFAULT_MODEL,
-                "object": "model",
-                "created": 1700000000,
-                "owned_by": "pawwake",
-            }
-        ],
+        "data": models,
     }
 
 
@@ -210,7 +211,7 @@ async def chat_completions(request: Request):
     if not shared.API_KEY:
         return JSONResponse(
             status_code=500,
-            content={"error": "API_KEY 未设置，请在环境变量中配置"},
+            content={"error": "API_KEY 未设置，请先在 Dashboard 的基础连接中配置"},
         )
 
     # 到期提醒由这条路由负责兜底：里层抛异常或非流式返回时仍未结清，就在这里交回；
@@ -233,6 +234,13 @@ async def chat_completions(request: Request):
 async def _chat_completions_inner(request: Request, pending_reminder_claims: list = None):
     body = await request.json()
     messages = body.get("messages", [])
+    model = body.get("model") or shared.DEFAULT_MODEL
+    if not model:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "模型未设置，请在请求中指定 model，或先在 Dashboard 设置默认模型"},
+        )
+    body["model"] = model
     pending_fragment_ids = []
     pending_memory_ids = []
     if pending_reminder_claims is None:
@@ -452,12 +460,6 @@ async def _chat_completions_inner(request: Request, pending_reminder_claims: lis
                     messages.insert(0, {"role": "system", "content": enhanced_prompt})
 
         body["messages"] = messages
-
-    # ---------- 模型处理 ----------
-    model = body.get("model", shared.DEFAULT_MODEL)
-    if not model:
-        model = shared.DEFAULT_MODEL
-    body["model"] = model
 
     # ---------- cache_control 兼容性处理 ----------
     if shared.CACHE_PARTITION_ENABLED and not partition_engine._is_anthropic_model(model):
