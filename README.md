@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/DasterProkio/awesome-ai-companion/main/assets/featured-in-awesome-ai-companion.png" alt="Featured in Awesome AI Companion" height="24">
 </a>
 
-**4.2.0 · Madeleine**
+**4.2.1 · Madeleine**
 
 *Follow the pawprints back.*
 
@@ -429,6 +429,10 @@ A: 打开 `https://你的网关地址/dashboard`，在「导出备份」页面�
 A: 能。这个项目的第一个部署者就是不会写代码的——代码是 AI 写的，部署是她自己看文档搞定的。
 
 ## 📋 更新日志
+
+### v4.2.1 · Madeleine（2026-11-28）
+
+- **长召回正文按命中处截取** — 普通检索记忆会按本次实际搜索词挑选相关完整句，最多注入 300 字；常驻记忆和到期提醒仍保留全文。对话召回的命中消息改为围绕最高权重的命中词截取 200 字，前后上下文仍各取开头 80 字。纯语义命中没有可定位的词时继续从开头截取。记忆重排与最终注入共用同一段正文。
 
 ### v4.2.0 · Madeleine（2026-10-31）
 

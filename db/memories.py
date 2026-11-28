@@ -344,10 +344,19 @@ async def _source_covered_memory_ids(source_message_ids) -> list[int]:
     return [int(row["id"]) for row in rows]
 
 
-def _memory_search_output(results, include_mode: bool, mode: str):
+def _memory_search_output(
+    results,
+    include_mode: bool,
+    mode: str,
+    keywords=(),
+    include_keywords: bool = False,
+):
     if not include_mode:
         return results
-    return {"results": results, "mode": mode}
+    output = {"results": results, "mode": mode}
+    if include_keywords:
+        output["keywords"] = list(keywords)
+    return output
 
 
 def _keywords_with_phrases(query: str):
@@ -380,6 +389,7 @@ async def search_memories(
     exclude_ids=None,
     recalled_message_ids=None,
     include_mode: bool = False,
+    include_keywords: bool = False,
 ):
     """
     搜索相关记忆
@@ -402,13 +412,16 @@ async def search_memories(
             limit,
             exclude_ids=excluded_ids,
             include_mode=include_mode,
+            include_keywords=include_keywords,
         )
 
     # ---- 纯关键词搜索 ----
     keywords, _ = _keywords_with_phrases(query)
 
     if not keywords:
-        return _memory_search_output([], include_mode, "keyword")
+        return _memory_search_output(
+            [], include_mode, "keyword", keywords, include_keywords
+        )
 
     pool = await db_core.get_pool()
     async with pool.acquire() as conn:
@@ -480,7 +493,9 @@ async def search_memories(
         else:
             print(f"🔍 搜索 '{query}' → 关键词 {keywords[:8]} → 无结果" + (f"（{filtered} 条被分数阈值过滤）" if filtered else ""))
 
-        return _memory_search_output(results, include_mode, "keyword")
+        return _memory_search_output(
+            results, include_mode, "keyword", keywords, include_keywords
+        )
 
 
 def _effective_days_ago(event_date, created_at, now_utc):
@@ -511,6 +526,7 @@ async def search_memories_hybrid(
     limit: int = 10,
     exclude_ids=None,
     include_mode: bool = False,
+    include_keywords: bool = False,
 ):
     """
     记忆混合搜索：关键词 + 向量，归一化后四维加权
@@ -524,7 +540,9 @@ async def search_memories_hybrid(
     search_mode = "hybrid" if query_embedding else "keyword"
 
     if not keywords and not query_embedding:
-        return _memory_search_output([], include_mode, search_mode)
+        return _memory_search_output(
+            [], include_mode, search_mode, keywords, include_keywords
+        )
 
     pool = await db_core.get_pool()
     async with pool.acquire() as conn:
@@ -671,7 +689,9 @@ async def search_memories_hybrid(
 
         if not candidates:
             print(f"🔍 混合搜索 '{query}' → 两路均无结果")
-            return _memory_search_output([], include_mode, search_mode)
+            return _memory_search_output(
+                [], include_mode, search_mode, keywords, include_keywords
+            )
 
         # ---- 归一化 + 加权 ----
         # 关键词轴直接用 IDF 覆盖率（0~1），不做批内拉伸，泛词池不会被顶满
@@ -736,7 +756,9 @@ async def search_memories_hybrid(
             print(f"🔍 混合搜索 '{query}' → 无结果" + (f"（{filtered} 条被过滤）" if filtered else ""))
 
         output = [dict(r) for r in results]
-        return _memory_search_output(output, include_mode, search_mode)
+        return _memory_search_output(
+            output, include_mode, search_mode, keywords, include_keywords
+        )
 
 
 async def get_extraction_candidates(

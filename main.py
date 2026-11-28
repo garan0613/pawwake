@@ -146,7 +146,7 @@ async def lifespan(app: FastAPI):
 
 
 
-app = FastAPI(title="Pawwake", version="4.2.0", lifespan=lifespan)
+app = FastAPI(title="Pawwake", version="4.2.1", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/mcp", mcp_http_app, name="mcp")
 

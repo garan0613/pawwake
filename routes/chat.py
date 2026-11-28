@@ -174,7 +174,7 @@ async def health_check():
 
     return {
         "status": "running",
-        "gateway": "Pawwake v4.2.0",
+        "gateway": "Pawwake v4.2.1",
         "system_prompt_loaded": len(resolved_system_prompt) > 0,
         "system_prompt_length": len(resolved_system_prompt),
         "database_enabled": shared.DATABASE_ENABLED,

@@ -561,7 +561,32 @@ def _fragment_id(anchor_ids) -> str | None:
     return f"v1:{hashlib.sha256(payload.encode()).hexdigest()[:32]}"
 
 
-def _assemble_fragments(all_messages, sorted_indices, matched_indices):
+def _content_excerpt(content: str, max_chars: int, terms=()) -> str:
+    if len(content) <= max_chars:
+        return content
+    lowered = content.lower()
+    anchor = next(
+        (
+            (lowered.find(term.lower()), len(term))
+            for term in terms
+            if term and lowered.find(term.lower()) >= 0
+        ),
+        None,
+    )
+    if anchor is None:
+        return content[:max_chars] + "…（省略）"
+    position, term_chars = anchor
+    start = max(0, position - max(0, max_chars - term_chars) // 2)
+    end = min(len(content), start + max_chars)
+    start = max(0, end - max_chars)
+    return (
+        ("…（省略）" if start else "")
+        + content[start:end]
+        + ("…（省略）" if end < len(content) else "")
+    )
+
+
+def _assemble_fragments(all_messages, sorted_indices, matched_indices, match_terms=()):
     fragments = []
     fragment_ids = []
     current = []
@@ -579,8 +604,9 @@ def _assemble_fragments(all_messages, sorted_indices, matched_indices):
         content = message["content"] or ""
         is_match = index in matched_indices
         max_chars = 200 if is_match else 80
-        if len(content) > max_chars:
-            content = content[:max_chars] + "…（省略）"
+        content = _content_excerpt(
+            content, max_chars, match_terms if is_match else ()
+        )
         created_at = message["created_at"]
         if created_at is not None and hasattr(created_at, "isoformat"):
             created_at = created_at.isoformat()
@@ -967,6 +993,7 @@ def _mark_conversation_message(message, keyword_score: float,
     return {
         "id": message["id"],
         "is_match": is_match,
+        "keyword_match": keyword_score > 0,
         "relevance": (
             shared.CONVERSATION_HW_KEYWORD * keyword_score
             + shared.CONVERSATION_HW_SEMANTIC * semantic_part
@@ -1017,6 +1044,12 @@ async def search_chat_fragments(
         keyword_weights = await _keyword_weights_for(
             conn, keyword_terms, use_tsv, exact_terms
         )
+        excerpt_terms = [
+            term for term, _weight in sorted(
+                zip(keyword_weights[0], keyword_weights[1]),
+                key=lambda item: -item[1],
+            )
+        ]
         keyword_scores = await _keyword_session_scores(
             conn,
             keyword_weights,
@@ -1160,6 +1193,7 @@ async def search_chat_fragments(
                     continue
                 total_matched = len(match_candidates)
                 kept = []
+                full_content_ids = set()
                 used_context_indices = set()
                 for match_index, _ in match_candidates:
                     context_indices = set(range(
@@ -1177,6 +1211,8 @@ async def search_chat_fragments(
                         fragment_id,
                         [marked[index]["id"] for index in sorted(context_indices)],
                     ))
+                    if marked[match_index]["keyword_match"]:
+                        full_content_ids.add(marked[match_index]["id"])
                     used_context_indices.update(context_indices)
                     if len(kept) >= max_matches_per_session:
                         break
@@ -1188,6 +1224,7 @@ async def search_chat_fragments(
                     "total_messages": len(marked),
                     "match_count": total_matched,
                     "kept": kept,
+                    "full_content_ids": full_content_ids,
                     "has_more_matches": total_matched > len(kept),
                     "hybrid_scores": {
                         "kw_raw": round(
@@ -1209,16 +1246,26 @@ async def search_chat_fragments(
             for _, _, _, message_ids in plan["kept"]
             for message_id in message_ids
         })
+        full_content_ids = sorted({
+            message_id
+            for plan in plans
+            for message_id in plan["full_content_ids"]
+        })
         detail_rows = await conn.fetch(
-            """SELECT id, role, LEFT(content, 201) AS content, created_at
+            """SELECT id, role,
+                      CASE WHEN id = ANY($2::int[])
+                           THEN content ELSE LEFT(content, 201) END AS content,
+                      created_at
                FROM conversations
                WHERE id = ANY($1::int[]) AND deleted_at IS NULL""",
             needed_ids,
+            full_content_ids,
         ) if needed_ids else []
         details = {row["id"]: row for row in detail_rows}
 
     results = []
     for plan in plans:
+        plan.pop("full_content_ids", None)
         selected_ids = [
             message_id
             for _, _, _, message_ids in plan["kept"]
@@ -1234,7 +1281,9 @@ async def search_chat_fragments(
                 index: details[message_id]
                 for index, message_id in zip(indices, message_ids)
             }
-            piece_fragments, _ = _assemble_fragments(messages, indices, matched_indices)
+            piece_fragments, _ = _assemble_fragments(
+                messages, indices, matched_indices, excerpt_terms
+            )
             fragments.extend(piece_fragments)
             fragment_ids.append(fragment_id)
             fragment_message_ids.append(message_ids)

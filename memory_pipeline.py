@@ -1,6 +1,7 @@
 """Memory injection, conversation recall, and background extraction."""
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 import shared
@@ -21,6 +22,43 @@ from memory_extractor import extract_memories
 # 发送期间每隔 RENEW 秒延长时限，进程崩溃后则由下一次请求重新处理
 REMINDER_LEASE_SECONDS = 330
 REMINDER_LEASE_RENEW_SECONDS = 100
+RETRIEVED_MEMORY_MAX_CHARS = 300
+
+
+def _memory_snippet(content: str, terms: list[str], max_chars: int = RETRIEVED_MEMORY_MAX_CHARS) -> str:
+    if len(content) <= max_chars:
+        return content
+    words = {term.lower() for term in terms if len(term) >= 2}
+    sentences = re.split(
+        r"(?<=[。！？；\n])|(?=①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d+\))",
+        content,
+    )
+    scored = []
+    position = 0
+    for sentence in sentences:
+        if sentence.strip():
+            lowered = sentence.lower()
+            scored.append((sum(word in lowered for word in words), position, sentence))
+        position += len(sentence)
+    if not scored:
+        return content[:max_chars] + "…"
+    scored.sort(key=lambda item: -item[0])
+    picked = []
+    total = 0
+    for _score, position, sentence in scored:
+        if total + len(sentence) > max_chars and picked:
+            break
+        picked.append((position, sentence))
+        total += len(sentence)
+    snippet = "".join(sentence for _, sentence in sorted(picked)).strip()[:max_chars]
+    return snippet + ("…" if len(content) > len(snippet) else "")
+
+
+def _snippet_memories(memories: list, terms: list[str]) -> list:
+    return [
+        {**dict(memory), "content": _memory_snippet(memory.get("content", ""), terms)}
+        for memory in memories
+    ]
 
 
 def _local_minute_text(dt) -> str:
@@ -89,10 +127,18 @@ async def _search_memories_for_injection(
         return []
 
     async def search(search_limit: int):
-        kwargs = {"limit": search_limit, "exclude_ids": exclude_ids}
+        kwargs = {
+            "limit": search_limit,
+            "exclude_ids": exclude_ids,
+            "include_mode": True,
+            "include_keywords": True,
+        }
         if recalled_message_ids is not None:
             kwargs["recalled_message_ids"] = recalled_message_ids
-        return await db_memories.search_memories(user_message, **kwargs) or []
+        output = await db_memories.search_memories(user_message, **kwargs)
+        return _snippet_memories(
+            output["results"] or [], output["keywords"] or []
+        )
 
     model = shared.RERANK_MODEL
     if shared.MEMORY_RERANK_ENABLED and model:

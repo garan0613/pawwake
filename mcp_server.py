@@ -12,7 +12,7 @@ server = MCPServer(
     "Pawwake",
     title="Pawwake Memory",
     description="Search and manage Pawwake memories.",
-    version="4.2.0",
+    version="4.2.1",
 )
 
 
